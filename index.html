@@ -61,7 +61,7 @@
         <h1>共円回避</h1>
         <div>
             <label>盤面の大きさ：</label>
-            <input type="number" id="boardSize" value="5" min="3" max="31" style="width: 50px;">
+            <input type="number" id="boardSize" value="5" min="3" max="25" style="width: 50px;">
             <button id="generateBtn" onclick="startGame()">問題を生成</button>
             <button id="retryBtn" onclick="retryGame()" disabled>やり直す</button>
         </div>
@@ -89,7 +89,7 @@
         let isGameOver = false;
         let errorStones = [];
         let placedStone = null;
-        let xMarks = []; // ✕マークの座標を保存する配列
+        let xMarks = [];
 
         function setupCanvas() {
             const uiHeight = 150; 
@@ -113,10 +113,6 @@
             setupCanvas();
             drawBoard();
         });
-
-        function online(p1, p2, p3) {
-            return (p2.x - p1.x) * (p3.y - p1.y) - (p2.y - p1.y) * (p3.x - p1.x) === 0;
-        }
 
         function oncircle(p1, p2, p3, p4) {
             let sq1 = p1.x * p1.x + p1.y * p1.y;
@@ -144,18 +140,6 @@
                             if (S.some(sp => sp.x === p.x && sp.y === p.y)) continue;
                             
                             let flag_out = false;
-                            
-                            if (S.length >= 2) {
-                                for (let i = 0; i < S.length && !flag_out; i++) {
-                                    for (let j = i + 1; j < S.length; j++) {
-                                        if (online(S[i], S[j], p)) {
-                                            flag_out = true;
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                            if (flag_out) continue;
                             
                             if (S.length >= 3) {
                                 for (let i = 0; i < S.length && !flag_out; i++) {
@@ -204,7 +188,7 @@
                 
                 if (problem) {
                     initialStones = problem.s;
-                    xMarks = []; // 新しい問題を生成したときのみ✕マークをリセット
+                    xMarks = []; 
                     resetGameState();
                     messageEl.textContent = "石を1つ置いてください";
                 } else {
@@ -227,7 +211,6 @@
             if (initialStones.length === 0) return;
             resetGameState();
             messageEl.textContent = "石を1つ置いてください";
-            // ここでは xMarks = [] を行わないため、✕は維持されます
         }
 
         function drawBoard() {
@@ -236,7 +219,6 @@
             cellSize = (logicalSize - padding * 2) / (N - 1);
             if (N === 1) cellSize = 0;
 
-            // 格子の描画
             ctx.strokeStyle = "#ccc";
             ctx.lineWidth = 1;
             for (let i = 0; i < N; i++) {
@@ -250,13 +232,9 @@
                 ctx.stroke();
             }
 
-            // ✕マークの描画
             xMarks.forEach(p => drawX(p.x, p.y));
-
-            // 既存の石を描画
             initialStones.forEach(p => drawStone(p.x, p.y, "#000"));
 
-            // プレイヤーが置いた石の描画
             if (placedStone) {
                 if (isGameOver && errorStones.length > 0) {
                     drawStone(placedStone.x, placedStone.y, "red");
@@ -267,7 +245,6 @@
                 }
             }
 
-            // エラー原因の石を赤く描画
             errorStones.forEach(p => drawStone(p.x, p.y, "red"));
         }
 
@@ -286,10 +263,10 @@
         function drawX(x, y) {
             let cx = padding + x * cellSize;
             let cy = padding + y * cellSize;
-            let size = Math.min(cellSize * 0.25, 25); // ✕のサイズを石より少し小さめに調整
+            let size = Math.min(cellSize * 0.25, 25); 
             if (N === 1) size = Math.min(logicalSize * 0.1, 25);
 
-            ctx.strokeStyle = "#666"; // グレーで✕を描画
+            ctx.strokeStyle = "#666"; 
             ctx.lineWidth = 3;
             ctx.beginPath();
             ctx.moveTo(cx - size, cy - size);
@@ -299,9 +276,7 @@
             ctx.stroke();
         }
 
-        // 左クリック（石を置く・消す）の処理
         canvas.addEventListener('click', function(e) {
-            // 問題が生成されていない場合は何もしない
             if (initialStones.length === 0) return;
 
             const rect = canvas.getBoundingClientRect();
@@ -313,27 +288,22 @@
 
             if (gridX < 0 || gridX >= N || gridY < 0 || gridY >= N) return;
 
-            // --- 修正箇所：不正解時に置いた石をクリックで消せるようにしました ---
             if (isGameOver) {
-                // 不正解の状態で、今置いた石（赤い石）の上をクリックした場合
                 if (errorStones.length > 0 && placedStone && placedStone.x === gridX && placedStone.y === gridY) {
-                    retryGame(); // 「やり直す」ボタンと同じ処理を呼び出す
+                    retryGame(); 
                 }
-                return; // それ以外の場所をクリックした場合や、正解後は何もしない
+                return;
             }
-            // -------------------------------------------------------------------
 
             let p = {x: gridX, y: gridY};
-            // 既に問題の石がある場所はクリックできない
             if (initialStones.some(sp => sp.x === p.x && sp.y === p.y)) return;
 
             placedStone = p;
             checkPlacement(p);
         });
 
-        // 右クリック（✕を付ける／消す）の処理を追加
         canvas.addEventListener('contextmenu', function(e) {
-            e.preventDefault(); // デフォルトの右クリックメニューを無効化
+            e.preventDefault(); 
             if (initialStones.length === 0) return;
 
             const rect = canvas.getBoundingClientRect();
@@ -345,36 +315,21 @@
 
             if (gridX < 0 || gridX >= N || gridY < 0 || gridY >= N) return;
 
-            // 既に✕マークがあるかチェック
             let markIndex = xMarks.findIndex(m => m.x === gridX && m.y === gridY);
             if (markIndex !== -1) {
-                // あれば削除
                 xMarks.splice(markIndex, 1);
             } else {
-                // なければ追加
                 xMarks.push({x: gridX, y: gridY});
             }
             
-            drawBoard(); // 画面を更新
+            drawBoard(); 
         });
 
         function checkPlacement(p) {
             let isError = false;
             errorStones = [];
 
-            if (initialStones.length >= 2) {
-                for (let i = 0; i < initialStones.length && !isError; i++) {
-                    for (let j = i + 1; j < initialStones.length; j++) {
-                        if (online(initialStones[i], initialStones[j], p)) {
-                            isError = true;
-                            errorStones.push(initialStones[i], initialStones[j]);
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if (!isError && initialStones.length >= 3) {
+            if (initialStones.length >= 3) {
                 for (let i = 0; i < initialStones.length && !isError; i++) {
                     for (let j = i + 1; j < initialStones.length && !isError; j++) {
                         for (let k = j + 1; k < initialStones.length; k++) {
@@ -396,7 +351,7 @@
                 retryBtn.disabled = false;
             } else {
                 messageEl.textContent = "正解";
-                messageEl.style.color = "green"; // 正解のテキストも一応緑色にする
+                messageEl.style.color = "green"; 
             }
 
             drawBoard();
