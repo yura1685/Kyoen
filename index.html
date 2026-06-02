@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>共円回避</title>
+    <style>
+        body {
+            background-color: #fff;
+            color: #000;
+            font-family: sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+        }
+        .header {
+            margin-bottom: 10px;
+        }
+        h1 {
+            font-size: 20px;
+            margin: 10px 0;
+        }
+        input, button {
+            border: 1px solid #000;
+            background-color: #fff;
+            color: #000;
+            padding: 5px 10px;
+            margin: 0 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover:not(:disabled) {
+            background-color: #eee;
+        }
+        button:disabled {
+            color: #999;
+            border-color: #999;
+            cursor: not-allowed;
+        }
+        canvas {
+            background-color: #fff;
+            cursor: pointer;
+        }
+        #message {
+            margin-top: 10px;
+            font-weight: bold;
+            font-size: 18px;
+            height: 24px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>共円回避</h1>
+        <div>
+            <label>盤面の大きさ：</label>
+            <input type="number" id="boardSize" value="5" min="3" max="31" style="width: 50px;">
+            <button id="generateBtn" onclick="startGame()">問題を生成</button>
+            <button id="retryBtn" onclick="retryGame()" disabled>やり直す</button>
+        </div>
+    </div>
+
+    <div>
+        <canvas id="gameCanvas"></canvas>
+    </div>
+    
+    <div id="message"></div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const messageEl = document.getElementById('message');
+        const retryBtn = document.getElementById('retryBtn');
+        const generateBtn = document.getElementById('generateBtn');
+
+        let N = 5;
+        let padding = 0;
+        let cellSize = 0;
+        let logicalSize = 0;
+        
+        let initialStones = [];
+        let isGameOver = false;
+        let errorStones = [];
+        let placedStone = null;
+
+        function setupCanvas() {
+            const uiHeight = 150; 
+            logicalSize = Math.min(window.innerWidth * 0.95, window.innerHeight - uiHeight);
+            
+            const dpr = window.devicePixelRatio || 1;
+            
+            canvas.style.width = logicalSize + 'px';
+            canvas.style.height = logicalSize + 'px';
+            
+            canvas.width = logicalSize * dpr;
+            canvas.height = logicalSize * dpr;
+            
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.scale(dpr, dpr);
+
+            padding = logicalSize * 0.1;
+        }
+
+        window.addEventListener('resize', () => {
+            setupCanvas();
+            drawBoard();
+        });
+
+        function online(p1, p2, p3) {
+            return (p2.x - p1.x) * (p3.y - p1.y) - (p2.y - p1.y) * (p3.x - p1.x) === 0;
+        }
+
+        function oncircle(p1, p2, p3, p4) {
+            let sq1 = p1.x * p1.x + p1.y * p1.y;
+            let m11 = (p2.x * p2.x + p2.y * p2.y) - sq1, m12 = p2.x - p1.x, m13 = p2.y - p1.y;
+            let m21 = (p3.x * p3.x + p3.y * p3.y) - sq1, m22 = p3.x - p1.x, m23 = p3.y - p1.y;
+            let m31 = (p4.x * p4.x + p4.y * p4.y) - sq1, m32 = p4.x - p1.x, m33 = p4.y - p1.y;
+            
+            let det = m11 * (m22 * m33 - m23 * m32) - 
+                      m12 * (m21 * m33 - m23 * m31) + 
+                      m13 * (m21 * m32 - m22 * m31);
+            return det === 0;
+        }
+
+        function generateProblem(boardSize) {
+            const maxAttempts = 2000;
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                let S = [];
+                while (true) {
+                    let cnt = 0;
+                    let nextCandidates = [];
+                    
+                    for (let h = 0; h < boardSize; h++) {
+                        for (let w = 0; w < boardSize; w++) {
+                            let p = {x: w, y: h};
+                            if (S.some(sp => sp.x === p.x && sp.y === p.y)) continue;
+                            
+                            let flag_out = false;
+                            
+                            if (S.length >= 2) {
+                                for (let i = 0; i < S.length && !flag_out; i++) {
+                                    for (let j = i + 1; j < S.length; j++) {
+                                        if (online(S[i], S[j], p)) {
+                                            flag_out = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            if (flag_out) continue;
+                            
+                            if (S.length >= 3) {
+                                for (let i = 0; i < S.length && !flag_out; i++) {
+                                    for (let j = i + 1; j < S.length && !flag_out; j++) {
+                                        for (let k = j + 1; k < S.length; k++) {
+                                            if (oncircle(S[i], S[j], S[k], p)) {
+                                                flag_out = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            if (flag_out) continue;
+                            
+                            cnt++;
+                            nextCandidates.push(p);
+                        }
+                    }
+                    
+                    if (cnt === 1) {
+                        return { s: S };
+                    } else if (cnt > 1) {
+                        let r = Math.floor(Math.random() * cnt);
+                        S.push(nextCandidates[r]);
+                    } else {
+                        break;
+                    }
+                }
+            }
+            return null;
+        }
+
+        function startGame() {
+            N = parseInt(document.getElementById('boardSize').value);
+            if (isNaN(N) || N < 3) return;
+
+            messageEl.textContent = "生成中...";
+            messageEl.style.color = "#000";
+            generateBtn.disabled = true;
+            retryBtn.disabled = true;
+
+            setTimeout(() => {
+                let problem = generateProblem(N);
+                generateBtn.disabled = false;
+                
+                if (problem) {
+                    initialStones = problem.s;
+                    resetGameState();
+                    messageEl.textContent = "石を1つ置いてください";
+                } else {
+                    messageEl.textContent = "生成失敗";
+                    messageEl.style.color = "red";
+                }
+            }, 50);
+        }
+
+        function resetGameState() {
+            isGameOver = false;
+            errorStones = [];
+            placedStone = null;
+            retryBtn.disabled = true;
+            messageEl.style.color = "#000";
+            drawBoard();
+        }
+
+        function retryGame() {
+            if (initialStones.length === 0) return;
+            resetGameState();
+            messageEl.textContent = "石を1つ置いてください";
+        }
+
+        function drawBoard() {
+            ctx.clearRect(0, 0, logicalSize, logicalSize);
+            
+            cellSize = (logicalSize - padding * 2) / (N - 1);
+            if (N === 1) cellSize = 0;
+
+            ctx.strokeStyle = "#ccc";
+            ctx.lineWidth = 1;
+            for (let i = 0; i < N; i++) {
+                ctx.beginPath();
+                ctx.moveTo(padding + i * cellSize, padding);
+                ctx.lineTo(padding + i * cellSize, logicalSize - padding);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(padding, padding + i * cellSize);
+                ctx.lineTo(logicalSize - padding, padding + i * cellSize);
+                ctx.stroke();
+            }
+
+            initialStones.forEach(p => drawStone(p.x, p.y, "#000"));
+
+            // プレイヤーが置いた石の描画
+            if (placedStone) {
+                if (isGameOver && errorStones.length > 0) {
+                    // 不正解の場合は赤色
+                    drawStone(placedStone.x, placedStone.y, "red");
+                } else if (isGameOver && errorStones.length === 0) {
+                    // 正解の場合は緑色
+                    drawStone(placedStone.x, placedStone.y, "green");
+                } else {
+                    drawStone(placedStone.x, placedStone.y, "#000");
+                }
+            }
+
+            errorStones.forEach(p => drawStone(p.x, p.y, "red"));
+        }
+
+        function drawStone(x, y, color) {
+            let cx = padding + x * cellSize;
+            let cy = padding + y * cellSize;
+            
+            let radius = Math.min(cellSize * 0.4, 40); 
+            if (N === 1) radius = Math.min(logicalSize * 0.1, 40);
+            
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+        }
+
+        canvas.addEventListener('click', function(e) {
+            if (isGameOver || initialStones.length === 0) return;
+
+            const rect = canvas.getBoundingClientRect();
+            let logicalX = e.clientX - rect.left;
+            let logicalY = e.clientY - rect.top;
+
+            let gridX = Math.round((logicalX - padding) / cellSize);
+            let gridY = Math.round((logicalY - padding) / cellSize);
+
+            if (gridX < 0 || gridX >= N || gridY < 0 || gridY >= N) return;
+
+            let p = {x: gridX, y: gridY};
+            if (initialStones.some(sp => sp.x === p.x && sp.y === p.y)) return;
+
+            placedStone = p;
+            checkPlacement(p);
+        });
+
+        function checkPlacement(p) {
+            let isError = false;
+            errorStones = [];
+
+            if (initialStones.length >= 2) {
+                for (let i = 0; i < initialStones.length && !isError; i++) {
+                    for (let j = i + 1; j < initialStones.length; j++) {
+                        if (online(initialStones[i], initialStones[j], p)) {
+                            isError = true;
+                            errorStones.push(initialStones[i], initialStones[j]);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!isError && initialStones.length >= 3) {
+                for (let i = 0; i < initialStones.length && !isError; i++) {
+                    for (let j = i + 1; j < initialStones.length && !isError; j++) {
+                        for (let k = j + 1; k < initialStones.length; k++) {
+                            if (oncircle(initialStones[i], initialStones[j], initialStones[k], p)) {
+                                isError = true;
+                                errorStones.push(initialStones[i], initialStones[j], initialStones[k]);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            isGameOver = true;
+
+            if (isError) {
+                messageEl.textContent = "不正解";
+                messageEl.style.color = "red";
+                retryBtn.disabled = false;
+            } else {
+                messageEl.textContent = "正解";
+                messageEl.style.color = "#000";
+            }
+
+            drawBoard();
+        }
+
+        setupCanvas();
+        drawBoard();
+    </script>
+</body>
+</html>
