@@ -48,10 +48,8 @@
             cursor: pointer;
         }
         #message {
-            margin-top: 10px;
             font-weight: bold;
             font-size: 18px;
-            height: 24px;
         }
     </style>
 </head>
@@ -65,20 +63,31 @@
             <button id="generateBtn" onclick="startGame()">問題を生成</button>
             <button id="retryBtn" onclick="retryGame()" disabled>やり直す</button>
         </div>
-    </div>
+        <div style="margin-top: 10px; font-size: 16px; display: flex; align-items: center; justify-content: center; height: 24px;">
+            <div style="width: 260px; text-align: right; padding-right: 20px;">
+                経過時間: <span id="timeDisplay">0.0</span>秒 &nbsp;|&nbsp; ミス数: <span id="missDisplay">0</span>
+            </div>
+            <div id="message" style="width: 260px; text-align: center;"></div>
+        </div>
+        </div>
 
     <div>
         <canvas id="gameCanvas"></canvas>
     </div>
     
-    <div id="message"></div>
-
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const messageEl = document.getElementById('message');
         const retryBtn = document.getElementById('retryBtn');
         const generateBtn = document.getElementById('generateBtn');
+
+        const timeDisplay = document.getElementById('timeDisplay');
+        const missDisplay = document.getElementById('missDisplay');
+        
+        let startTime = 0;
+        let timerInterval = null;
+        let missCount = 0;
 
         let N = 5;
         let padding = 0;
@@ -128,9 +137,16 @@
 
         function generateProblem(boardSize) {
             const maxAttempts = 2000;
+            const timeLimit = 2000; 
+            const genStartTime = Date.now();
+
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                if (Date.now() - genStartTime > timeLimit) return null;
+
                 let S = [];
                 while (true) {
+                    if (Date.now() - genStartTime > timeLimit) return null;
+
                     let cnt = 0;
                     let nextCandidates = [];
                     
@@ -173,6 +189,11 @@
             return null;
         }
 
+        function updateTimer() {
+            let elapsed = Date.now() - startTime;
+            timeDisplay.textContent = (elapsed / 1000).toFixed(1);
+        }
+
         function startGame() {
             N = parseInt(document.getElementById('boardSize').value);
             if (isNaN(N) || N < 3) return;
@@ -181,6 +202,11 @@
             messageEl.style.color = "#000";
             generateBtn.disabled = true;
             retryBtn.disabled = true;
+
+            clearInterval(timerInterval);
+            missCount = 0;
+            timeDisplay.textContent = "0.0";
+            missDisplay.textContent = missCount;
 
             setTimeout(() => {
                 let problem = generateProblem(N);
@@ -191,6 +217,9 @@
                     xMarks = []; 
                     resetGameState();
                     messageEl.textContent = "石を1つ置いてください";
+
+                    startTime = Date.now();
+                    timerInterval = setInterval(updateTimer, 100);
                 } else {
                     messageEl.textContent = "生成失敗";
                     messageEl.style.color = "red";
@@ -233,6 +262,7 @@
             }
 
             xMarks.forEach(p => drawX(p.x, p.y));
+
             initialStones.forEach(p => drawStone(p.x, p.y, "#000"));
 
             if (placedStone) {
@@ -346,10 +376,16 @@
             isGameOver = true;
 
             if (isError) {
+                missCount++;
+                missDisplay.textContent = missCount;
+
                 messageEl.textContent = "不正解";
                 messageEl.style.color = "red";
                 retryBtn.disabled = false;
             } else {
+                clearInterval(timerInterval); 
+                updateTimer(); 
+
                 messageEl.textContent = "正解";
                 messageEl.style.color = "green"; 
             }
