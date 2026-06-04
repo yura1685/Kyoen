@@ -46,6 +46,9 @@
         canvas {
             background-color: #fff;
             cursor: pointer;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
         }
         #message {
             font-weight: bold;
@@ -54,7 +57,6 @@
     </style>
 </head>
 <body>
-
     <div class="header">
         <h1>共円回避</h1>
         <div>
@@ -69,12 +71,11 @@
             </div>
             <div id="message" style="width: 260px; text-align: center;"></div>
         </div>
-        </div>
-
+    </div>
     <div>
         <canvas id="gameCanvas"></canvas>
     </div>
-    
+
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
@@ -84,7 +85,7 @@
 
         const timeDisplay = document.getElementById('timeDisplay');
         const missDisplay = document.getElementById('missDisplay');
-        
+
         let startTime = 0;
         let timerInterval = null;
         let missCount = 0;
@@ -93,25 +94,28 @@
         let padding = 0;
         let cellSize = 0;
         let logicalSize = 0;
-        
+
         let initialStones = [];
         let isGameOver = false;
         let errorStones = [];
         let placedStone = null;
         let xMarks = [];
 
+        let longPressTimer = null;
+        let isLongPressed = false;
+
         function setupCanvas() {
             const uiHeight = 150; 
             logicalSize = Math.min(window.innerWidth * 0.95, window.innerHeight - uiHeight);
-            
+
             const dpr = window.devicePixelRatio || 1;
-            
+
             canvas.style.width = logicalSize + 'px';
             canvas.style.height = logicalSize + 'px';
-            
+
             canvas.width = logicalSize * dpr;
             canvas.height = logicalSize * dpr;
-            
+
             ctx.setTransform(1, 0, 0, 1, 0, 0);
             ctx.scale(dpr, dpr);
 
@@ -128,7 +132,7 @@
             let m11 = (p2.x * p2.x + p2.y * p2.y) - sq1, m12 = p2.x - p1.x, m13 = p2.y - p1.y;
             let m21 = (p3.x * p3.x + p3.y * p3.y) - sq1, m22 = p3.x - p1.x, m23 = p3.y - p1.y;
             let m31 = (p4.x * p4.x + p4.y * p4.y) - sq1, m32 = p4.x - p1.x, m33 = p4.y - p1.y;
-            
+
             let det = m11 * (m22 * m33 - m23 * m32) - 
                       m12 * (m21 * m33 - m23 * m31) + 
                       m13 * (m21 * m32 - m22 * m31);
@@ -149,14 +153,14 @@
 
                     let cnt = 0;
                     let nextCandidates = [];
-                    
+
                     for (let h = 0; h < boardSize; h++) {
                         for (let w = 0; w < boardSize; w++) {
                             let p = {x: w, y: h};
                             if (S.some(sp => sp.x === p.x && sp.y === p.y)) continue;
-                            
+
                             let flag_out = false;
-                            
+
                             if (S.length >= 3) {
                                 for (let i = 0; i < S.length && !flag_out; i++) {
                                     for (let j = i + 1; j < S.length && !flag_out; j++) {
@@ -170,12 +174,12 @@
                                 }
                             }
                             if (flag_out) continue;
-                            
+
                             cnt++;
                             nextCandidates.push(p);
                         }
                     }
-                    
+
                     if (cnt === 1) {
                         return { s: S };
                     } else if (cnt > 1) {
@@ -211,7 +215,7 @@
             setTimeout(() => {
                 let problem = generateProblem(N);
                 generateBtn.disabled = false;
-                
+
                 if (problem) {
                     initialStones = problem.s;
                     xMarks = []; 
@@ -244,7 +248,7 @@
 
         function drawBoard() {
             ctx.clearRect(0, 0, logicalSize, logicalSize);
-            
+
             cellSize = (logicalSize - padding * 2) / (N - 1);
             if (N === 1) cellSize = 0;
 
@@ -283,7 +287,7 @@
             let cy = padding + y * cellSize;
             let radius = Math.min(cellSize * 0.4, 40); 
             if (N === 1) radius = Math.min(logicalSize * 0.1, 40);
-            
+
             ctx.beginPath();
             ctx.arc(cx, cy, radius, 0, Math.PI * 2);
             ctx.fillStyle = color;
@@ -307,6 +311,11 @@
         }
 
         canvas.addEventListener('click', function(e) {
+            if (isLongPressed) {
+                isLongPressed = false;
+                return;
+            }
+
             if (initialStones.length === 0) return;
 
             const rect = canvas.getBoundingClientRect();
@@ -354,6 +363,45 @@
             
             drawBoard(); 
         });
+
+        canvas.addEventListener('touchstart', function(e) {
+            if (initialStones.length === 0) return;
+            isLongPressed = false;
+            
+            let touch = e.touches[0];
+            
+            longPressTimer = setTimeout(function() {
+                isLongPressed = true;
+                const rect = canvas.getBoundingClientRect();
+                let logicalX = touch.clientX - rect.left;
+                let logicalY = touch.clientY - rect.top;
+
+                let gridX = Math.round((logicalX - padding) / cellSize);
+                let gridY = Math.round((logicalY - padding) / cellSize);
+
+                if (gridX < 0 || gridX >= N || gridY < 0 || gridY >= N) return;
+
+                let markIndex = xMarks.findIndex(m => m.x === gridX && m.y === gridY);
+                if (markIndex !== -1) {
+                    xMarks.splice(markIndex, 1);
+                } else {
+                    xMarks.push({x: gridX, y: gridY});
+                }
+                
+                drawBoard(); 
+            }, 500);
+        }, { passive: true });
+
+        function cancelLongPress() {
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+        }
+
+        canvas.addEventListener('touchmove', cancelLongPress, { passive: true });
+        canvas.addEventListener('touchend', cancelLongPress);
+        canvas.addEventListener('touchcancel', cancelLongPress);
 
         function checkPlacement(p) {
             let isError = false;
