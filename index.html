@@ -3,6 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <title>共円回避</title>
+    <meta name="description" content="任意の4点が同一円周上（または直線上）にないように点を配置するゲームです。">
+    <meta property="og:title" content="共円回避">
+    <meta property="og:description" content="任意の4点が同一円周上（または直線上）にないように点を配置するゲームです。">
+    <meta property="og:type" content="website">
     <style>
         body {
             background-color: #fff;
@@ -103,6 +107,8 @@
 
         let longPressTimer = null;
         let isLongPressed = false;
+
+        let isTimerStopped = false;
 
         function setupCanvas() {
             const uiHeight = 150; 
@@ -211,6 +217,8 @@
             missCount = 0;
             timeDisplay.textContent = "0.0";
             missDisplay.textContent = missCount;
+
+            isTimerStopped = false;
 
             setTimeout(() => {
                 let problem = generateProblem(N);
@@ -328,7 +336,7 @@
             if (gridX < 0 || gridX >= N || gridY < 0 || gridY >= N) return;
 
             if (isGameOver) {
-                if (errorStones.length > 0 && placedStone && placedStone.x === gridX && placedStone.y === gridY) {
+                if (placedStone && placedStone.x === gridX && placedStone.y === gridY) {
                     retryGame(); 
                 }
                 return;
@@ -424,18 +432,24 @@
             isGameOver = true;
 
             if (isError) {
-                missCount++;
-                missDisplay.textContent = missCount;
+                if (!isTimerStopped) {
+                    missCount++;
+                    missDisplay.textContent = missCount;
+                }
 
                 messageEl.textContent = "不正解";
                 messageEl.style.color = "red";
                 retryBtn.disabled = false;
             } else {
-                clearInterval(timerInterval); 
-                updateTimer(); 
+                if (!isTimerStopped) {
+                    clearInterval(timerInterval); 
+                    updateTimer(); 
+                    isTimerStopped = true;
+                }
 
                 messageEl.textContent = "正解";
                 messageEl.style.color = "green"; 
+                retryBtn.disabled = false;
             }
 
             drawBoard();
