@@ -2,91 +2,216 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>共円回避</title>
     <meta name="description" content="任意の4点が同一円周上（または直線上）にないように点を配置するゲームです。">
     <meta property="og:title" content="共円回避">
     <meta property="og:description" content="任意の4点が同一円周上（または直線上）にないように点を配置するゲームです。">
     <meta property="og:type" content="website">
+
     <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+        }
+
         body {
             background-color: #fff;
             color: #000;
             font-family: sans-serif;
             text-align: center;
-            margin: 0;
-            padding: 0;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            height: 100vh;
-            width: 100vw;
+            height: 100dvh;
             overflow: hidden;
         }
+
         .header {
-            margin-bottom: 10px;
+            width: 100%;
+            flex-shrink: 0;
+            padding: 8px 10px 4px;
         }
+
         h1 {
             font-size: 20px;
-            margin: 10px 0;
+            margin: 4px 0 6px;
         }
+
+        .rule {
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .size-control {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
         input, button {
             border: 1px solid #000;
             background-color: #fff;
             color: #000;
             padding: 5px 10px;
-            margin: 0 5px;
             cursor: pointer;
             font-size: 16px;
+            margin: 0;
         }
+
+        input {
+            width: 60px;
+        }
+
         button:hover:not(:disabled) {
             background-color: #eee;
         }
+
         button:disabled {
             color: #999;
             border-color: #999;
             cursor: not-allowed;
         }
+
+        .status {
+            margin-top: 8px;
+            min-height: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 24px;
+            font-size: 16px;
+        }
+
+        .stats {
+            white-space: nowrap;
+        }
+
+        #message {
+            min-width: 100px;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .board {
+            flex: 1;
+            min-height: 0;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
         canvas {
+            display: block;
             background-color: #fff;
             cursor: pointer;
             -webkit-user-select: none;
             user-select: none;
             -webkit-touch-callout: none;
+            touch-action: manipulation;
         }
-        #message {
-            font-weight: bold;
-            font-size: 18px;
+
+        @media (max-width: 600px) {
+            .header {
+                padding: 6px 6px 2px;
+            }
+
+            h1 {
+                font-size: 19px;
+                margin: 2px 0 4px;
+            }
+
+            .rule {
+                font-size: 12px;
+                line-height: 1.4;
+                margin: 0 auto 6px;
+                max-width: 95%;
+            }
+
+            .controls {
+                gap: 5px;
+            }
+
+            .size-control {
+                width: 100%;
+                justify-content: center;
+            }
+
+            input, button {
+                font-size: 14px;
+                padding: 5px 8px;
+            }
+
+            .status {
+                margin-top: 6px;
+                gap: 2px;
+                flex-direction: column;
+                font-size: 14px;
+                min-height: 42px;
+            }
+
+            #message {
+                font-size: 16px;
+                min-height: 19px;
+            }
         }
     </style>
 </head>
+
 <body>
     <div class="header">
         <h1>共円回避</h1>
-        <div>
-            <label>盤面の大きさ：</label>
-            <input type="number" id="boardSize" value="5" min="3" max="25" style="width: 50px;">
+
+        <div class="rule">
+            石を1つ置き、任意の4点が同一円周上または同一直線上にないようにしてください。
+        </div>
+
+        <div class="controls">
+            <div class="size-control">
+                <label for="boardSize">盤面の大きさ：</label>
+                <input type="number" id="boardSize" value="5" min="3" max="25">
+            </div>
+
             <button id="generateBtn" onclick="startGame()">問題を生成</button>
             <button id="retryBtn" onclick="retryGame()" disabled>やり直す</button>
         </div>
-        <div style="margin-top: 10px; font-size: 16px; display: flex; align-items: center; justify-content: center; height: 24px;">
-            <div style="width: 260px; text-align: right; padding-right: 20px;">
-                経過時間: <span id="timeDisplay">0.0</span>秒 &nbsp;|&nbsp; ミス数: <span id="missDisplay">0</span>
+
+        <div class="status">
+            <div class="stats">
+                経過時間: <span id="timeDisplay">0.0</span>秒
+                &nbsp;|&nbsp;
+                ミス数: <span id="missDisplay">0</span>
             </div>
-            <div id="message" style="width: 260px; text-align: center;"></div>
+
+            <div id="message"></div>
         </div>
     </div>
-    <div>
+
+    <div class="board">
         <canvas id="gameCanvas"></canvas>
     </div>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        const boardEl = document.querySelector('.board');
         const messageEl = document.getElementById('message');
         const retryBtn = document.getElementById('retryBtn');
         const generateBtn = document.getElementById('generateBtn');
-
         const timeDisplay = document.getElementById('timeDisplay');
         const missDisplay = document.getElementById('missDisplay');
 
@@ -100,32 +225,31 @@
         let logicalSize = 0;
 
         let initialStones = [];
-        let isGameOver = false;
-        let errorStones = [];
         let placedStone = null;
+        let errorStones = [];
         let xMarks = [];
+
+        let isAttemptLocked = false;
+        let isSolved = false;
 
         let longPressTimer = null;
         let isLongPressed = false;
 
-        let isTimerStopped = false;
-
         function setupCanvas() {
-            const uiHeight = 150; 
-            logicalSize = Math.min(window.innerWidth * 0.95, window.innerHeight - uiHeight);
+            const rect = boardEl.getBoundingClientRect();
+            logicalSize = Math.max(0, Math.min(rect.width * 0.96, rect.height * 0.96));
 
             const dpr = window.devicePixelRatio || 1;
 
             canvas.style.width = logicalSize + 'px';
             canvas.style.height = logicalSize + 'px';
 
-            canvas.width = logicalSize * dpr;
-            canvas.height = logicalSize * dpr;
+            canvas.width = Math.round(logicalSize * dpr);
+            canvas.height = Math.round(logicalSize * dpr);
 
-            ctx.setTransform(1, 0, 0, 1, 0, 0);
-            ctx.scale(dpr, dpr);
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-            padding = logicalSize * 0.1;
+            padding = logicalSize * 0.08;
         }
 
         window.addEventListener('resize', () => {
@@ -134,167 +258,223 @@
         });
 
         function oncircle(p1, p2, p3, p4) {
-            let sq1 = p1.x * p1.x + p1.y * p1.y;
-            let m11 = (p2.x * p2.x + p2.y * p2.y) - sq1, m12 = p2.x - p1.x, m13 = p2.y - p1.y;
-            let m21 = (p3.x * p3.x + p3.y * p3.y) - sq1, m22 = p3.x - p1.x, m23 = p3.y - p1.y;
-            let m31 = (p4.x * p4.x + p4.y * p4.y) - sq1, m32 = p4.x - p1.x, m33 = p4.y - p1.y;
+            const sq1 = p1.x * p1.x + p1.y * p1.y;
 
-            let det = m11 * (m22 * m33 - m23 * m32) - 
-                      m12 * (m21 * m33 - m23 * m31) + 
-                      m13 * (m21 * m32 - m22 * m31);
+            const m11 = p2.x * p2.x + p2.y * p2.y - sq1;
+            const m12 = p2.x - p1.x;
+            const m13 = p2.y - p1.y;
+
+            const m21 = p3.x * p3.x + p3.y * p3.y - sq1;
+            const m22 = p3.x - p1.x;
+            const m23 = p3.y - p1.y;
+
+            const m31 = p4.x * p4.x + p4.y * p4.y - sq1;
+            const m32 = p4.x - p1.x;
+            const m33 = p4.y - p1.y;
+
+            const det =
+                m11 * (m22 * m33 - m23 * m32)
+                - m12 * (m21 * m33 - m23 * m31)
+                + m13 * (m21 * m32 - m22 * m31);
+
             return det === 0;
         }
 
         function generateProblem(boardSize) {
             const maxAttempts = 2000;
-            const timeLimit = 2000; 
-            const genStartTime = Date.now();
+            const timeLimit = 2000;
+            const genStartTime = performance.now();
+            const boardArea = boardSize * boardSize;
 
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
-                if (Date.now() - genStartTime > timeLimit) return null;
+                if (performance.now() - genStartTime > timeLimit) return null;
 
-                let S = [];
-                while (true) {
-                    if (Date.now() - genStartTime > timeLimit) return null;
+                const stones = [];
+                const available = new Uint8Array(boardArea);
+                available.fill(1);
 
-                    let cnt = 0;
-                    let nextCandidates = [];
+                let availableCount = boardArea;
 
-                    for (let h = 0; h < boardSize; h++) {
-                        for (let w = 0; w < boardSize; w++) {
-                            let p = {x: w, y: h};
-                            if (S.some(sp => sp.x === p.x && sp.y === p.y)) continue;
+                while (availableCount > 0) {
+                    if (performance.now() - genStartTime > timeLimit) return null;
 
-                            let flag_out = false;
+                    if (availableCount === 1) {
+                        return {s: stones};
+                    }
 
-                            if (S.length >= 3) {
-                                for (let i = 0; i < S.length && !flag_out; i++) {
-                                    for (let j = i + 1; j < S.length && !flag_out; j++) {
-                                        for (let k = j + 1; k < S.length; k++) {
-                                            if (oncircle(S[i], S[j], S[k], p)) {
-                                                flag_out = true;
-                                                break;
-                                            }
-                                        }
-                                    }
+                    let r = Math.floor(Math.random() * availableCount);
+                    let selectedIndex = -1;
+
+                    for (let index = 0; index < boardArea; index++) {
+                        if (!available[index]) continue;
+
+                        if (r === 0) {
+                            selectedIndex = index;
+                            break;
+                        }
+
+                        r--;
+                    }
+
+                    const q = {
+                        x: selectedIndex % boardSize,
+                        y: Math.floor(selectedIndex / boardSize)
+                    };
+
+                    available[selectedIndex] = 0;
+                    availableCount--;
+
+                    for (let i = 0; i < stones.length; i++) {
+                        for (let j = i + 1; j < stones.length; j++) {
+                            for (let index = 0; index < boardArea; index++) {
+                                if (!available[index]) continue;
+
+                                const p = {
+                                    x: index % boardSize,
+                                    y: Math.floor(index / boardSize)
+                                };
+
+                                if (oncircle(stones[i], stones[j], q, p)) {
+                                    available[index] = 0;
+                                    availableCount--;
                                 }
                             }
-                            if (flag_out) continue;
-
-                            cnt++;
-                            nextCandidates.push(p);
                         }
                     }
 
-                    if (cnt === 1) {
-                        return { s: S };
-                    } else if (cnt > 1) {
-                        let r = Math.floor(Math.random() * cnt);
-                        S.push(nextCandidates[r]);
-                    } else {
-                        break;
-                    }
+                    stones.push(q);
                 }
             }
+
             return null;
         }
 
         function updateTimer() {
-            let elapsed = Date.now() - startTime;
+            const elapsed = Date.now() - startTime;
             timeDisplay.textContent = (elapsed / 1000).toFixed(1);
         }
 
         function startGame() {
             N = parseInt(document.getElementById('boardSize').value);
+
             if (isNaN(N) || N < 3) return;
 
-            messageEl.textContent = "生成中...";
-            messageEl.style.color = "#000";
+            clearInterval(timerInterval);
+            timerInterval = null;
+
+            initialStones = [];
+            placedStone = null;
+            errorStones = [];
+            xMarks = [];
+
+            missCount = 0;
+            isAttemptLocked = false;
+            isSolved = false;
+
+            timeDisplay.textContent = "0.0";
+            missDisplay.textContent = "0";
+
             generateBtn.disabled = true;
             retryBtn.disabled = true;
 
-            clearInterval(timerInterval);
-            missCount = 0;
-            timeDisplay.textContent = "0.0";
-            missDisplay.textContent = missCount;
+            messageEl.textContent = "生成中...";
+            messageEl.style.color = "#000";
 
-            isTimerStopped = false;
+            drawBoard();
 
             setTimeout(() => {
-                let problem = generateProblem(N);
+                const problem = generateProblem(N);
+
                 generateBtn.disabled = false;
 
-                if (problem) {
-                    initialStones = problem.s;
-                    xMarks = []; 
-                    resetGameState();
-                    messageEl.textContent = "石を1つ置いてください";
+                if (!problem) {
+                    initialStones = [];
+                    placedStone = null;
+                    errorStones = [];
+                    xMarks = [];
 
-                    startTime = Date.now();
-                    timerInterval = setInterval(updateTimer, 100);
-                } else {
                     messageEl.textContent = "生成失敗";
                     messageEl.style.color = "red";
+
+                    drawBoard();
+                    return;
                 }
+
+                initialStones = problem.s;
+
+                setupCanvas();
+                drawBoard();
+
+                messageEl.textContent = "石を1つ置いてください";
+                messageEl.style.color = "#000";
+
+                startTime = Date.now();
+                timerInterval = setInterval(updateTimer, 100);
             }, 50);
         }
 
-        function resetGameState() {
-            isGameOver = false;
-            errorStones = [];
-            placedStone = null;
-            retryBtn.disabled = true;
-            messageEl.style.color = "#000";
-            drawBoard();
-        }
-
         function retryGame() {
-            if (initialStones.length === 0) return;
-            resetGameState();
+            if (initialStones.length === 0 || isSolved) return;
+
+            placedStone = null;
+            errorStones = [];
+            isAttemptLocked = false;
+
+            retryBtn.disabled = true;
+
             messageEl.textContent = "石を1つ置いてください";
+            messageEl.style.color = "#000";
+
+            drawBoard();
         }
 
         function drawBoard() {
             ctx.clearRect(0, 0, logicalSize, logicalSize);
 
+            if (logicalSize <= 0) return;
+
             cellSize = (logicalSize - padding * 2) / (N - 1);
-            if (N === 1) cellSize = 0;
 
             ctx.strokeStyle = "#ccc";
             ctx.lineWidth = 1;
+
             for (let i = 0; i < N; i++) {
                 ctx.beginPath();
                 ctx.moveTo(padding + i * cellSize, padding);
                 ctx.lineTo(padding + i * cellSize, logicalSize - padding);
                 ctx.stroke();
+
                 ctx.beginPath();
                 ctx.moveTo(padding, padding + i * cellSize);
                 ctx.lineTo(logicalSize - padding, padding + i * cellSize);
                 ctx.stroke();
             }
 
-            xMarks.forEach(p => drawX(p.x, p.y));
-
-            initialStones.forEach(p => drawStone(p.x, p.y, "#000"));
-
-            if (placedStone) {
-                if (isGameOver && errorStones.length > 0) {
-                    drawStone(placedStone.x, placedStone.y, "red");
-                } else if (isGameOver && errorStones.length === 0) {
-                    drawStone(placedStone.x, placedStone.y, "green");
-                } else {
-                    drawStone(placedStone.x, placedStone.y, "#000");
-                }
+            for (const p of xMarks) {
+                drawX(p.x, p.y);
             }
 
-            errorStones.forEach(p => drawStone(p.x, p.y, "red"));
+            for (const p of initialStones) {
+                drawStone(p.x, p.y, "#000");
+            }
+
+            if (placedStone) {
+                drawStone(
+                    placedStone.x,
+                    placedStone.y,
+                    errorStones.length > 0 ? "red" : "green"
+                );
+            }
+
+            for (const p of errorStones) {
+                drawStone(p.x, p.y, "red");
+            }
         }
 
         function drawStone(x, y, color) {
-            let cx = padding + x * cellSize;
-            let cy = padding + y * cellSize;
-            let radius = Math.min(cellSize * 0.4, 40); 
-            if (N === 1) radius = Math.min(logicalSize * 0.1, 40);
+            const cx = padding + x * cellSize;
+            const cy = padding + y * cellSize;
+            const radius = Math.min(cellSize * 0.4, 40);
 
             ctx.beginPath();
             ctx.arc(cx, cy, radius, 0, Math.PI * 2);
@@ -303,13 +483,13 @@
         }
 
         function drawX(x, y) {
-            let cx = padding + x * cellSize;
-            let cy = padding + y * cellSize;
-            let size = Math.min(cellSize * 0.25, 25); 
-            if (N === 1) size = Math.min(logicalSize * 0.1, 25);
+            const cx = padding + x * cellSize;
+            const cy = padding + y * cellSize;
+            const size = Math.min(cellSize * 0.25, 25);
 
-            ctx.strokeStyle = "#666"; 
+            ctx.strokeStyle = "#666";
             ctx.lineWidth = 3;
+
             ctx.beginPath();
             ctx.moveTo(cx - size, cy - size);
             ctx.lineTo(cx + size, cy + size);
@@ -318,142 +498,182 @@
             ctx.stroke();
         }
 
-        canvas.addEventListener('click', function(e) {
-            if (isLongPressed) {
-                isLongPressed = false;
-                return;
-            }
-
-            if (initialStones.length === 0) return;
-
+        function getGridPosition(clientX, clientY) {
             const rect = canvas.getBoundingClientRect();
-            let logicalX = e.clientX - rect.left;
-            let logicalY = e.clientY - rect.top;
 
-            let gridX = Math.round((logicalX - padding) / cellSize);
-            let gridY = Math.round((logicalY - padding) / cellSize);
+            const logicalX = clientX - rect.left;
+            const logicalY = clientY - rect.top;
 
-            if (gridX < 0 || gridX >= N || gridY < 0 || gridY >= N) return;
+            const gridX = Math.round((logicalX - padding) / cellSize);
+            const gridY = Math.round((logicalY - padding) / cellSize);
 
-            if (isGameOver) {
-                if (placedStone && placedStone.x === gridX && placedStone.y === gridY) {
-                    retryGame(); 
-                }
-                return;
+            if (gridX < 0 || gridX >= N || gridY < 0 || gridY >= N) {
+                return null;
             }
 
-            let p = {x: gridX, y: gridY};
-            if (initialStones.some(sp => sp.x === p.x && sp.y === p.y)) return;
-
-            placedStone = p;
-            checkPlacement(p);
-        });
-
-        canvas.addEventListener('contextmenu', function(e) {
-            e.preventDefault(); 
-            if (initialStones.length === 0) return;
-
-            const rect = canvas.getBoundingClientRect();
-            let logicalX = e.clientX - rect.left;
-            let logicalY = e.clientY - rect.top;
-
-            let gridX = Math.round((logicalX - padding) / cellSize);
-            let gridY = Math.round((logicalY - padding) / cellSize);
-
-            if (gridX < 0 || gridX >= N || gridY < 0 || gridY >= N) return;
-
-            let markIndex = xMarks.findIndex(m => m.x === gridX && m.y === gridY);
-            if (markIndex !== -1) {
-                xMarks.splice(markIndex, 1);
-            } else {
-                xMarks.push({x: gridX, y: gridY});
-            }
-            
-            drawBoard(); 
-        });
-
-        canvas.addEventListener('touchstart', function(e) {
-            if (initialStones.length === 0) return;
-            isLongPressed = false;
-            
-            let touch = e.touches[0];
-            
-            longPressTimer = setTimeout(function() {
-                isLongPressed = true;
-                const rect = canvas.getBoundingClientRect();
-                let logicalX = touch.clientX - rect.left;
-                let logicalY = touch.clientY - rect.top;
-
-                let gridX = Math.round((logicalX - padding) / cellSize);
-                let gridY = Math.round((logicalY - padding) / cellSize);
-
-                if (gridX < 0 || gridX >= N || gridY < 0 || gridY >= N) return;
-
-                let markIndex = xMarks.findIndex(m => m.x === gridX && m.y === gridY);
-                if (markIndex !== -1) {
-                    xMarks.splice(markIndex, 1);
-                } else {
-                    xMarks.push({x: gridX, y: gridY});
-                }
-                
-                drawBoard(); 
-            }, 500);
-        }, { passive: true });
-
-        function cancelLongPress() {
-            if (longPressTimer) {
-                clearTimeout(longPressTimer);
-                longPressTimer = null;
-            }
+            return {x: gridX, y: gridY};
         }
 
-        canvas.addEventListener('touchmove', cancelLongPress, { passive: true });
-        canvas.addEventListener('touchend', cancelLongPress);
-        canvas.addEventListener('touchcancel', cancelLongPress);
+        function toggleXMark(p) {
+            if (isSolved) return;
 
-        function checkPlacement(p) {
-            let isError = false;
-            errorStones = [];
+            const index = xMarks.findIndex(m => m.x === p.x && m.y === p.y);
 
-            if (initialStones.length >= 3) {
-                for (let i = 0; i < initialStones.length && !isError; i++) {
-                    for (let j = i + 1; j < initialStones.length && !isError; j++) {
-                        for (let k = j + 1; k < initialStones.length; k++) {
-                            if (oncircle(initialStones[i], initialStones[j], initialStones[k], p)) {
-                                isError = true;
-                                errorStones.push(initialStones[i], initialStones[j], initialStones[k]);
-                                break;
-                            }
+            if (index === -1) {
+                xMarks.push(p);
+            } else {
+                xMarks.splice(index, 1);
+            }
+
+            drawBoard();
+        }
+
+        function findError(p) {
+            for (let i = 0; i < initialStones.length; i++) {
+                for (let j = i + 1; j < initialStones.length; j++) {
+                    for (let k = j + 1; k < initialStones.length; k++) {
+                        if (oncircle(initialStones[i], initialStones[j], initialStones[k], p)) {
+                            return [
+                                initialStones[i],
+                                initialStones[j],
+                                initialStones[k]
+                            ];
                         }
                     }
                 }
             }
 
-            isGameOver = true;
+            return [];
+        }
 
-            if (isError) {
-                if (!isTimerStopped) {
-                    missCount++;
-                    missDisplay.textContent = missCount;
+        function checkPlacement(p) {
+            placedStone = p;
+            errorStones = findError(p);
+        
+            if (isSolved) {
+                if (errorStones.length > 0) {
+                    messageEl.textContent = "不正解";
+                    messageEl.style.color = "red";
+                } else {
+                    messageEl.textContent = "正解";
+                    messageEl.style.color = "green";
                 }
-
+        
+                drawBoard();
+                return;
+            }
+        
+            isAttemptLocked = true;
+        
+            if (errorStones.length > 0) {
+                missCount++;
+                missDisplay.textContent = missCount;
+        
                 messageEl.textContent = "不正解";
                 messageEl.style.color = "red";
                 retryBtn.disabled = false;
-            } else {
-                if (!isTimerStopped) {
-                    clearInterval(timerInterval); 
-                    updateTimer(); 
-                    isTimerStopped = true;
-                }
-
-                messageEl.textContent = "正解";
-                messageEl.style.color = "green"; 
-                retryBtn.disabled = false;
+        
+                drawBoard();
+                return;
             }
-
+        
+            clearInterval(timerInterval);
+            timerInterval = null;
+            updateTimer();
+        
+            isSolved = true;
+            isAttemptLocked = false;
+            retryBtn.disabled = true;
+        
+            messageEl.textContent = "正解";
+            messageEl.style.color = "green";
+        
             drawBoard();
         }
+        
+        canvas.addEventListener('click', e => {
+            if (isLongPressed) {
+                isLongPressed = false;
+                return;
+            }
+        
+            if (initialStones.length === 0) return;
+        
+            const p = getGridPosition(e.clientX, e.clientY);
+        
+            if (!p) return;
+        
+            if (initialStones.some(sp => sp.x === p.x && sp.y === p.y)) {
+                return;
+            }
+        
+            if (isSolved) {
+                if (placedStone && placedStone.x === p.x && placedStone.y === p.y) {
+                    placedStone = null;
+                    errorStones = [];
+        
+                    messageEl.textContent = "石を1つ置いてください";
+                    messageEl.style.color = "#000";
+        
+                    drawBoard();
+                    return;
+                }
+        
+                checkPlacement(p);
+                return;
+            }
+        
+            if (isAttemptLocked) {
+                if (placedStone && placedStone.x === p.x && placedStone.y === p.y) {
+                    retryGame();
+                }
+        
+                return;
+            }
+        
+            checkPlacement(p);
+        });
+
+        canvas.addEventListener('contextmenu', e => {
+            e.preventDefault();
+
+            if (initialStones.length === 0) return;
+
+            const p = getGridPosition(e.clientX, e.clientY);
+
+            if (!p) return;
+
+            toggleXMark(p);
+        });
+
+        canvas.addEventListener('touchstart', e => {
+            if (initialStones.length === 0 || isSolved) return;
+
+            isLongPressed = false;
+
+            const touch = e.touches[0];
+
+            longPressTimer = setTimeout(() => {
+                isLongPressed = true;
+
+                const p = getGridPosition(touch.clientX, touch.clientY);
+
+                if (!p) return;
+
+                toggleXMark(p);
+            }, 500);
+        }, {passive: true});
+
+        function cancelLongPress() {
+            if (!longPressTimer) return;
+
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
+
+        canvas.addEventListener('touchmove', cancelLongPress, {passive: true});
+        canvas.addEventListener('touchend', cancelLongPress);
+        canvas.addEventListener('touchcancel', cancelLongPress);
 
         setupCanvas();
         drawBoard();
